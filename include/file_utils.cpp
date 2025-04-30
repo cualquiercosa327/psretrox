@@ -2,7 +2,7 @@
 #include <fstream>
 #include <stdexcept>
 
-// Función para leer un archivo binario en un vector de bytes
+// Funciï¿½n para leer un archivo binario en un vector de bytes
 std::vector<uint8_t> readBinaryFile(const std::string& filePath) {
     std::ifstream file(filePath, std::ios::binary);
     if (!file) {
@@ -11,7 +11,16 @@ std::vector<uint8_t> readBinaryFile(const std::string& filePath) {
     return std::vector<uint8_t>((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 }
 
-// Función para escribir un archivo binario
+std::string cleanFileName(const std::string& name) {
+    size_t pos = name.find(';');
+    if (pos != std::string::npos) {
+        return name.substr(0, pos);
+    }
+    return name;
+}
+
+
+// Funciï¿½n para escribir un archivo binario
 void writeBinaryFile(const std::string& filePath, const std::vector<uint8_t>& data) {
     std::ofstream file(filePath, std::ios::binary);
     if (!file) {

@@ -2,9 +2,15 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
+#include <string>
 
-// Función para leer un archivo binario en un vector de bytes
+// Funciï¿½n para leer un archivo binario en un vector de bytes
 std::vector<uint8_t> readBinaryFile(const std::string& filePath);
 
-// Función para escribir un archivo binario
+// Remover ";1" dos nomes (versÃµes do padrÃ£o ISO)
+// Remove ";1" from names (ISO standard versions)
+std::string cleanFileName(const std::string& name);
+
+// Funciï¿½n para escribir un archivo binario
 void writeBinaryFile(const std::string& filePath, const std::vector<uint8_t>& data);
