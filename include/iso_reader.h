@@ -14,6 +14,10 @@ public:
 
     bool isOpen() const;
 
+    // Tenta localizar e extrair um arquivo da ISO pelo nome
+    // Attempts to locate and extract a file from the ISO by name
+    bool extractFileByName(const std::string& isoFileName, const std::string& outputPath);
+
     // Lê um bloco da ISO (por padrão, 2048 bytes)
     // Reads a block from the ISO (default: 2048 bytes)
     std::vector<uint8_t> readBlock(size_t blockIndex, size_t blockSize = 2048);

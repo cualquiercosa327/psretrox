@@ -86,36 +86,44 @@ std::string ISOReader::findSystemCNF()
 }
 
 // Implementação da função readDirectory
-std::vector<std::string> ISOReader::readDirectory() {
+// Implementation of the readDirectory function
+std::vector<std::string> ISOReader::readDirectory()
+{
     std::vector<std::string> fileNames;
 
     auto block = readBlock(16);
-    if (block.empty()) {
+    if (block.empty())
+    {
         std::cerr << "Erro ao ler o Volume Descriptor." << std::endl;
         return fileNames;
     }
 
     // Root Directory Record começa em byte 156 e tem 34 bytes (ISO 9660)
     size_t rootDirRecordOffset = 156;
-    uint32_t rootDirLBA = *reinterpret_cast<uint32_t*>(&block[rootDirRecordOffset + 2]);
-    uint32_t rootDirSize = *reinterpret_cast<uint32_t*>(&block[rootDirRecordOffset + 10]);
+    uint32_t rootDirLBA = *reinterpret_cast<uint32_t *>(&block[rootDirRecordOffset + 2]);
+    uint32_t rootDirSize = *reinterpret_cast<uint32_t *>(&block[rootDirRecordOffset + 10]);
 
     size_t numBlocks = (rootDirSize + 2047) / 2048;
 
-    for (size_t i = 0; i < numBlocks; ++i) {
+    for (size_t i = 0; i < numBlocks; ++i)
+    {
         auto dirBlock = readBlock(rootDirLBA + i);
-        if (dirBlock.empty()) continue;
+        if (dirBlock.empty())
+            continue;
 
         size_t pos = 0;
-        while (pos < dirBlock.size()) {
+        while (pos < dirBlock.size())
+        {
             uint8_t recordLength = dirBlock[pos];
-            if (recordLength == 0) break; // fim dos registros
-
+            if (recordLength == 0)
+                break;
             uint8_t nameLength = dirBlock[pos + 32];
-            std::string name(reinterpret_cast<char*>(&dirBlock[pos + 33]), nameLength);
+            std::string name(reinterpret_cast<char *>(&dirBlock[pos + 33]), nameLength);
 
             // Ignora entradas especiais '.' e '..'
-            if (name != "\0" && name != "\1") {
+            // Ignore special entries '.' and '..'
+            if (name != "\0" && name != "\1")
+            {
                 fileNames.push_back(cleanFileName(name));
             }
 
@@ -126,3 +134,93 @@ std::vector<std::string> ISOReader::readDirectory() {
     return fileNames;
 }
 
+bool ISOReader::extractFileByName(const std::string &isoFileName, const std::string &outputPath)
+{
+    std::cout << "Iniciando a busca e extração do arquivo: " << isoFileName << std::endl;
+
+    auto normalizeName = [](const std::string &name)
+    {
+        std::string normalized = name;
+        std::transform(normalized.begin(), normalized.end(), normalized.begin(), ::toupper);
+        return normalized;
+    };
+
+    std::string normalizedSearchName = normalizeName(isoFileName);
+
+    auto block = readBlock(16); // Bloco 16 contém o Primary Volume Descriptor
+    if (block.empty())
+    {
+        std::cerr << "Erro ao ler o Primary Volume Descriptor." << std::endl;
+        return false;
+    }
+
+    // Offset para o Root Directory Record (byte 156 no PVD)
+    size_t rootDirRecordOffset = 156;
+    uint32_t rootDirLBA = *reinterpret_cast<uint32_t *>(&block[rootDirRecordOffset + 2]);
+    uint32_t rootDirSize = *reinterpret_cast<uint32_t *>(&block[rootDirRecordOffset + 10]);
+
+    size_t numRootBlocks = (rootDirSize + 2047) / 2048;
+
+    for (size_t i = 0; i < numRootBlocks; ++i)
+    {
+        auto dirBlock = readBlock(rootDirLBA + i);
+        if (dirBlock.empty())
+            continue;
+
+        size_t pos = 0;
+        while (pos < dirBlock.size())
+        {
+            uint8_t recordLength = dirBlock[pos];
+            if (recordLength == 0)
+                break;
+
+            uint8_t nameLength = dirBlock[pos + 32];
+            std::string name(reinterpret_cast<char *>(&dirBlock[pos + 33]), nameLength);
+
+            if (nameLength > 0)
+            {
+                if (normalizeName(cleanFileName(name)) == normalizedSearchName)
+                {
+                    // Encontrou o arquivo!
+                    uint32_t fileLBA = *reinterpret_cast<uint32_t *>(&dirBlock[pos + 2]);
+                    uint32_t fileSize = *reinterpret_cast<uint32_t *>(&dirBlock[pos + 10]);
+
+                    std::cout << "Arquivo encontrado: " << name << ", LBA do dado: " << fileLBA << ", Tamanho: " << fileSize << " bytes." << std::endl;
+
+                    size_t numFileBlocksToRead = (fileSize + 2047) / 2048;
+                    std::vector<uint8_t> fileData;
+
+                    for (size_t j = 0; j < numFileBlocksToRead; ++j)
+                    {
+                        auto dataBlock = readBlock(fileLBA + j);
+                        if (dataBlock.empty())
+                        {
+                            std::cerr << "Erro ao ler bloco " << j << " do arquivo (LBA: " << fileLBA + j << ")." << std::endl;
+                            return false;
+                        }
+                        fileData.insert(fileData.end(), dataBlock.begin(), dataBlock.end());
+                    }
+
+                    std::cout << "Dados do arquivo lidos. Total de bytes lidos: " << fileData.size() << std::endl;
+
+                    // Gravar no arquivo de saída
+                    std::ofstream outFile(outputPath, std::ios::binary);
+                    if (!outFile)
+                    {
+                        std::cerr << "Erro ao abrir arquivo de saída: " << outputPath << std::endl;
+                        return false;
+                    }
+
+                    // Escrever apenas a quantidade correta de bytes do arquivo
+                    outFile.write(reinterpret_cast<const char *>(fileData.data()), fileSize);
+                    std::cout << "Arquivo extraído com sucesso para: " << outputPath << std::endl;
+                    return true;
+                }
+            }
+            pos += recordLength;
+        }
+    }
+
+    std::cerr << "Arquivo não encontrado na ISO: " << isoFileName << std::endl;
+    return false;
+}
