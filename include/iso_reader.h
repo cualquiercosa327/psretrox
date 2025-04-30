@@ -6,9 +6,10 @@
 #include <fstream>
 #include <cstdint>
 
-class ISOReader {
+class ISOReader
+{
 public:
-    ISOReader(const std::string& path);
+    ISOReader(const std::string &path);
     ~ISOReader();
 
     bool isOpen() const;
@@ -24,6 +25,10 @@ public:
     // Busca e retorna o conteúdo do SYSTEM.CNF se encontrado
     // Searches and returns the content of SYSTEM.CNF if found
     std::string findSystemCNF();
+
+    // Lê e lista os arquivos do diretório raiz da ISO
+    // Reads and lists the files in the root directory of the ISO
+    std::vector<std::string> readDirectory();
 
 private:
     std::ifstream file;
