@@ -27,5 +27,12 @@ int main() {
     std::string systemCnf = reader.findSystemCNF();
     std::cout << "Conteúdo do SYSTEM.CNF:\n" << systemCnf << "\n";
 
+    // Teste leitura do diretório
+    auto files = reader.readDirectory();
+    std::cout << "Arquivos no diretório raiz:\n";
+    for (const auto& file : files) {
+        std::cout << file << std::endl;
+    }
+
     return 0;
 }
