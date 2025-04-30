@@ -6,6 +6,10 @@ Feel free to explore and use the code freely, with no restrictions.**
 
 PSRetrox is a C++ application designed to reverse engineer PlayStation 2 games. The primary goal of this project is to extract and process game files, enabling native PC ports of PS2 games. PSRetrox includes built-in tools for decompiling and decoding game assets, such as audio, 3D models, source code, and other game data.
 
+## KRPLAB - Contributions 🏁
+-Reading the directory and extracting small files (1 block).
+-Extraction works for smaller files that fit in a single block (2048 bytes).
+
 ---
 
 ## **Progress**
