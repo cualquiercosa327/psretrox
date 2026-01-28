@@ -1,41 +1,38 @@
 #ifndef ISO_READER_H
 #define ISO_READER_H
 
-#include <vector>
-#include <string>
-#include <fstream>
-#include <cstdint>
+#include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
 
-class ISOReader
-{
-public:
-    ISOReader(const std::string &path);
-    ~ISOReader();
+#define ISO_BLOCK_SIZE 2048
 
-    bool isOpen() const;
-
-    // Tenta localizar e extrair um arquivo da ISO pelo nome
-    // Attempts to locate and extract a file from the ISO by name
-    bool extractFileByName(const std::string& isoFileName, const std::string& outputPath);
-
-    // Lê um bloco da ISO (por padrão, 2048 bytes)
-    // Reads a block from the ISO (default: 2048 bytes)
-    std::vector<uint8_t> readBlock(size_t blockIndex, size_t blockSize = 2048);
-
-    // Lê um intervalo qualquer de bytes (offset + tamanho)
-    // Reads a range of bytes (offset + length)
-    std::vector<uint8_t> readRange(size_t offset, size_t length);
-
-    // Busca e retorna o conteúdo do SYSTEM.CNF se encontrado
-    // Searches and returns the content of SYSTEM.CNF if found
-    std::string findSystemCNF();
-
-    // Lê e lista os arquivos do diretório raiz da ISO
-    // Reads and lists the files in the root directory of the ISO
-    std::vector<std::string> readDirectory();
-
-private:
-    std::ifstream file;
+struct ISOReader {
+    FILE *file;
 };
+
+// Inicializa o leitor de ISO. Retorna 1 se sucesso, 0 se erro.
+int ISOReader_init(struct ISOReader *reader, const char *path);
+
+// Fecha o arquivo ISO
+void ISOReader_close(struct ISOReader *reader);
+
+// Retorna 1 se o arquivo está aberto, 0 caso contrário
+int ISOReader_isOpen(const struct ISOReader *reader);
+
+// Lê um bloco da ISO (default: 2048 bytes). Retorna número de bytes lidos.
+size_t ISOReader_readBlock(struct ISOReader *reader, size_t blockIndex, uint8_t *buffer, size_t blockSize);
+
+// Lê um intervalo qualquer de bytes (offset + tamanho). Retorna número de bytes lidos.
+size_t ISOReader_readRange(struct ISOReader *reader, size_t offset, size_t length, uint8_t *buffer);
+
+// Busca e retorna o conteúdo do SYSTEM.CNF se encontrado. Retorna 1 se achou, 0 se não. O conteúdo vai para o buffer.
+int ISOReader_findSystemCNF(struct ISOReader *reader, char *buffer, size_t bufsize);
+
+// Lê e lista os arquivos do diretório raiz da ISO. Recebe ponteiro para função callback para cada nome encontrado.
+void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char *filename, void *userdata), void *userdata);
+
+// Extrai um arquivo da ISO pelo nome e salva no caminho de saída. Retorna 1 se sucesso, 0 se erro.
+int ISOReader_extractFileByName(struct ISOReader *reader, const char *isoFileName, const char *outputPath);
 
 #endif // ISO_READER_H
