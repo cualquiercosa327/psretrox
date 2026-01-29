@@ -3,36 +3,41 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-// Função auxiliar para limpar nome de arquivo ISO 9660 (remove ;1 e espaços)
-static void clean_filename(const char *src, size_t len, char *dst, size_t dstsize)
-{
+/**
+* @brief Aux function to clean ISO 9660 filenames (remove version and trailing spaces)
+* @param src Source filename
+* @param len Length of source filename
+* @param dst Destination buffer
+* @param dstsize Size of destination buffer
+*/
+static void clean_filename(const char *src, size_t len, char *dst, size_t dstsize) {
     size_t i, j = 0;
-    for (i = 0; i < len && j < dstsize - 1; ++i)
-    {
+    for (i = 0; i < len && j < dstsize - 1; ++i) {
         if (src[i] == ';')
             break;
         if (src[i] == '\0')
             break;
         dst[j++] = src[i];
     }
-    // Remove espaços no final
+    // Remove trailing spaces
     while (j > 0 && dst[j - 1] == ' ')
         --j;
+
     dst[j] = '\0';
 }
 
-// Função auxiliar para converter string para maiúsculas
-static void str_to_upper(char *s)
-{
-    while (*s)
-    {
+/**
+ * @brief Converts a string to uppercase in place
+ * @param s The string to convert
+ */
+static void str_to_upper(char *s) {
+    while (*s) {
         *s = (char)toupper((unsigned char)*s);
         ++s;
     }
 }
 
-int ISOReader_init(struct ISOReader *reader, const char *path)
-{
+int ISOReader_init(struct ISOReader *reader, const char *path) {
     if (!reader || !path)
         return 0;
 
@@ -40,22 +45,18 @@ int ISOReader_init(struct ISOReader *reader, const char *path)
     return reader->file != NULL;
 }
 
-void ISOReader_close(struct ISOReader *reader)
-{
-    if (reader && reader->file)
-    {
+void ISOReader_close(struct ISOReader *reader) {
+    if (reader && reader->file) {
         fclose(reader->file);
         reader->file = NULL;
     }
 }
 
-int ISOReader_isOpen(const struct ISOReader *reader)
-{
+int ISOReader_isOpen(const struct ISOReader *reader) {
     return reader && reader->file != NULL;
 }
 
-size_t ISOReader_readBlock(struct ISOReader *reader, size_t blockIndex, uint8_t *buffer, size_t blockSize)
-{
+size_t ISOReader_readBlock(struct ISOReader *reader, size_t blockIndex, uint8_t *buffer, size_t blockSize) {
     if (!reader || !reader->file || !buffer)
         return 0;
 
@@ -66,8 +67,7 @@ size_t ISOReader_readBlock(struct ISOReader *reader, size_t blockIndex, uint8_t 
     return fread(buffer, 1, blockSize, reader->file);
 }
 
-size_t ISOReader_readRange(struct ISOReader *reader, size_t offset, size_t length, uint8_t *buffer)
-{
+size_t ISOReader_readRange(struct ISOReader *reader, size_t offset, size_t length, uint8_t *buffer) {
     if (!reader || !reader->file || !buffer)
         return 0;
 
@@ -77,8 +77,7 @@ size_t ISOReader_readRange(struct ISOReader *reader, size_t offset, size_t lengt
     return fread(buffer, 1, length, reader->file);
 }
 
-int ISOReader_findSystemCNF(struct ISOReader *reader, char *buffer, size_t bufsize)
-{
+int ISOReader_findSystemCNF(struct ISOReader *reader, char *buffer, size_t bufsize) {
     if (!reader || !reader->file || !buffer || bufsize == 0)
         return 0;
 
@@ -87,21 +86,17 @@ int ISOReader_findSystemCNF(struct ISOReader *reader, char *buffer, size_t bufsi
     const char *needle = "SYSTEM.CNF";
     size_t needleLen = 10;
 
-    for (size_t i = 0; i < maxBlocks; ++i)
-    {
+    for (size_t i = 0; i < maxBlocks; ++i) {
         size_t bytesRead = ISOReader_readBlock(reader, i, block, ISO_BLOCK_SIZE);
         if (bytesRead == 0)
             continue;
 
         // Busca "SYSTEM.CNF" no bloco
-        for (size_t j = 0; j + needleLen <= bytesRead; ++j)
-        {
-            if (memcmp(&block[j], needle, needleLen) == 0)
-            {
+        for (size_t j = 0; j + needleLen <= bytesRead; ++j) {
+            if (memcmp(&block[j], needle, needleLen) == 0) {
                 // Encontrou! Copia até 512 bytes printáveis
                 size_t k = 0;
-                for (size_t m = j; m < j + 512 && m < bytesRead && k < bufsize - 1; ++m)
-                {
+                for (size_t m = j; m < j + 512 && m < bytesRead && k < bufsize - 1; ++m) {
                     if (isprint(block[m]) || block[m] == '\n')
                         buffer[k++] = (char)block[m];
                 }
@@ -115,8 +110,7 @@ int ISOReader_findSystemCNF(struct ISOReader *reader, char *buffer, size_t bufsi
     return 0;
 }
 
-void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char *filename, void *userdata), void *userdata)
-{
+void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char *filename, void *userdata), void *userdata) {
     if (!reader || !reader->file || !onFile)
         return;
 
@@ -143,22 +137,19 @@ void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char
 
     size_t numBlocks = (rootDirSize + ISO_BLOCK_SIZE - 1) / ISO_BLOCK_SIZE;
 
-    for (size_t i = 0; i < numBlocks; ++i)
-    {
+    for (size_t i = 0; i < numBlocks; ++i) {
         uint8_t dirBlock[ISO_BLOCK_SIZE];
         if (ISOReader_readBlock(reader, rootDirLBA + i, dirBlock, ISO_BLOCK_SIZE) == 0)
             continue;
 
         size_t pos = 0;
-        while (pos < ISO_BLOCK_SIZE)
-        {
+        while (pos < ISO_BLOCK_SIZE) {
             uint8_t recordLength = dirBlock[pos];
             if (recordLength == 0)
                 break;
 
             uint8_t nameLength = dirBlock[pos + 32];
-            if (nameLength > 0 && pos + 33 + nameLength <= ISO_BLOCK_SIZE)
-            {
+            if (nameLength > 0 && pos + 33 + nameLength <= ISO_BLOCK_SIZE) {
                 char rawName[256];
                 char cleanName[256];
 
@@ -169,8 +160,7 @@ void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char
                 rawName[nameLength] = '\0';
 
                 // Ignora entradas especiais '.' e '..'
-                if (!(nameLength == 1 && (rawName[0] == '\0' || rawName[0] == '\1')))
-                {
+                if (!(nameLength == 1 && (rawName[0] == '\0' || rawName[0] == '\1'))) {
                     clean_filename(rawName, nameLength, cleanName, sizeof(cleanName));
                     onFile(cleanName, userdata);
                 }
@@ -181,7 +171,7 @@ void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char
     }
 }
 
-// Função para extrair arquivo por nome (equivalente ao extractFileByName do C++)
+
 int ISOReader_extractFileByName(struct ISOReader *reader, const char *isoFileName, const char *outputPath)
 {
     if (!reader || !reader->file || !isoFileName || !outputPath)
@@ -213,22 +203,19 @@ int ISOReader_extractFileByName(struct ISOReader *reader, const char *isoFileNam
 
     size_t numBlocks = (rootDirSize + ISO_BLOCK_SIZE - 1) / ISO_BLOCK_SIZE;
 
-    for (size_t i = 0; i < numBlocks; ++i)
-    {
+    for (size_t i = 0; i < numBlocks; ++i) {
         uint8_t dirBlock[ISO_BLOCK_SIZE];
         if (ISOReader_readBlock(reader, rootDirLBA + i, dirBlock, ISO_BLOCK_SIZE) == 0)
             continue;
 
         size_t pos = 0;
-        while (pos < ISO_BLOCK_SIZE)
-        {
+        while (pos < ISO_BLOCK_SIZE) {
             uint8_t recordLength = dirBlock[pos];
             if (recordLength == 0)
                 break;
 
             uint8_t nameLength = dirBlock[pos + 32];
-            if (nameLength > 0 && pos + 33 + nameLength <= ISO_BLOCK_SIZE)
-            {
+            if (nameLength > 0 && pos + 33 + nameLength <= ISO_BLOCK_SIZE) {
                 char rawName[256];
                 char cleanName[256];
 
@@ -262,13 +249,11 @@ int ISOReader_extractFileByName(struct ISOReader *reader, const char *isoFileNam
                     size_t bytesRemaining = fileSize;
                     size_t blockIdx = 0;
 
-                    while (bytesRemaining > 0)
-                    {
+                    while (bytesRemaining > 0) {
                         uint8_t dataBlock[ISO_BLOCK_SIZE];
                         size_t bytesRead = ISOReader_readBlock(reader, fileLBA + blockIdx, dataBlock, ISO_BLOCK_SIZE);
 
-                        if (bytesRead == 0)
-                        {
+                        if (bytesRead == 0) {
                             fclose(outFile);
                             return 0;
                         }

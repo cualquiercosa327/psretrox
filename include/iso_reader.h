@@ -11,28 +11,65 @@ struct ISOReader {
     FILE *file;
 };
 
-// Inicializa o leitor de ISO. Retorna 1 se sucesso, 0 se erro.
+/**
+ * @brief Initializes the ISO reader. Returns 1 on success, 0 on failure.
+ * @param reader Pointer to ISOReader struct
+ * @param path Path to the ISO file
+ */
 int ISOReader_init(struct ISOReader *reader, const char *path);
 
-// Fecha o arquivo ISO
+/**
+ * @brief Closes the ISO reader and releases resources.
+ * @param reader Pointer to ISOReader struct
+ */
 void ISOReader_close(struct ISOReader *reader);
 
-// Retorna 1 se o arquivo está aberto, 0 caso contrário
+/**
+ * @brief Checks if the ISO file is open. Returns 1 if open, 0 if not.
+ * @param reader Pointer to ISOReader struct
+ */
 int ISOReader_isOpen(const struct ISOReader *reader);
 
-// Lê um bloco da ISO (default: 2048 bytes). Retorna número de bytes lidos.
+/**
+ * @brief Reads a block of data from the ISO. Returns number of bytes read.
+ * @param reader Pointer to ISOReader struct
+ * @param blockIndex Index of the block to read
+ * @param buffer Buffer to store the read data
+ * @param blockSize Size of each block (usually 2048 bytes)
+ */
 size_t ISOReader_readBlock(struct ISOReader *reader, size_t blockIndex, uint8_t *buffer, size_t blockSize);
 
-// Lê um intervalo qualquer de bytes (offset + tamanho). Retorna número de bytes lidos.
+/**
+ * @brief Reads a range of bytes from the ISO. Returns number of bytes read.
+ * @param reader Pointer to ISOReader struct
+ * @param offset Offset in bytes from the start of the ISO
+ * @param length Number of bytes to read
+ * @param buffer Buffer to store the read data
+ */
 size_t ISOReader_readRange(struct ISOReader *reader, size_t offset, size_t length, uint8_t *buffer);
 
-// Busca e retorna o conteúdo do SYSTEM.CNF se encontrado. Retorna 1 se achou, 0 se não. O conteúdo vai para o buffer.
+/**
+ * @brief Searches and returns the content of SYSTEM.CNF if found. Returns 1 if found, 0 if not. The content is placed in the buffer.
+ * @param reader Pointer to ISOReader struct
+ * @param buffer Buffer to store the content
+ * @param bufsize Size of the buffer
+ */
 int ISOReader_findSystemCNF(struct ISOReader *reader, char *buffer, size_t bufsize);
 
-// Lê e lista os arquivos do diretório raiz da ISO. Recebe ponteiro para função callback para cada nome encontrado.
+/**
+ * @brief Reads and lists files in the root directory of the ISO. Receives a callback function pointer for each found filename.
+ * @param reader Pointer to ISOReader struct
+ * @param onFile Callback function called for each filename
+ * @param userdata User data passed to the callback
+ */
 void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char *filename, void *userdata), void *userdata);
 
-// Extrai um arquivo da ISO pelo nome e salva no caminho de saída. Retorna 1 se sucesso, 0 se erro.
+/**
+ * @brief Extracts a file from the ISO by name and saves it to the output path. Returns 1 on success, 0 on failure.
+ * @param reader Pointer to ISOReader struct
+ * @param isoFileName Name of the file inside the ISO
+ * @param outputPath Path to save the extracted file
+ */
 int ISOReader_extractFileByName(struct ISOReader *reader, const char *isoFileName, const char *outputPath);
 
 #endif // ISO_READER_H
