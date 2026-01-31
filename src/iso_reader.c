@@ -3,39 +3,6 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-/**
-* @brief Aux function to clean ISO 9660 filenames (remove version and trailing spaces)
-* @param src Source filename
-* @param len Length of source filename
-* @param dst Destination buffer
-* @param dstsize Size of destination buffer
-*/
-static void clean_filename(const char *src, size_t len, char *dst, size_t dstsize) {
-    size_t i, j = 0;
-    for (i = 0; i < len && j < dstsize - 1; ++i) {
-        if (src[i] == ';')
-            break;
-        if (src[i] == '\0')
-            break;
-        dst[j++] = src[i];
-    }
-    // Remove trailing spaces
-    while (j > 0 && dst[j - 1] == ' ')
-        --j;
-
-    dst[j] = '\0';
-}
-
-/**
- * @brief Converts a string to uppercase in place
- * @param s The string to convert
- */
-static void str_to_upper(char *s) {
-    while (*s) {
-        *s = (char)toupper((unsigned char)*s);
-        ++s;
-    }
-}
 
 int ISOReader_init(struct ISOReader *reader, const char *path) {
     if (!reader || !path)
@@ -161,7 +128,7 @@ void ISOReader_readDirectory(struct ISOReader *reader, void (*onFile)(const char
 
                 // Ignora entradas especiais '.' e '..'
                 if (!(nameLength == 1 && (rawName[0] == '\0' || rawName[0] == '\1'))) {
-                    clean_filename(rawName, nameLength, cleanName, sizeof(cleanName));
+                    clean_iso_filename_buffer(rawName, nameLength, cleanName, sizeof(cleanName));
                     onFile(cleanName, userdata);
                 }
             }
@@ -225,7 +192,7 @@ int ISOReader_extractFileByName(struct ISOReader *reader, const char *isoFileNam
                 memcpy(rawName, &dirBlock[pos + 33], nameLength);
                 rawName[nameLength] = '\0';
 
-                clean_filename(rawName, nameLength, cleanName, sizeof(cleanName));
+                clean_iso_filename_buffer(rawName, nameLength, cleanName, sizeof(cleanName));
                 str_to_upper(cleanName);
 
                 if (strcmp(cleanName, normalizedSearch) == 0)
