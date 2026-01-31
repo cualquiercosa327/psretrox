@@ -1,65 +1,93 @@
-# psretrox - Playstation 2 Decompilation & Recompilation Tool
+# psretrox - PlayStation 2 Decompilation & Recompilation Tool
 
-## [Project Status]
-**Due to recent attention and viral spread, I want to clarify that this project has been paused for several months. It was started as a personal and experimental exploration into low-level C++, and it is not currently under active development.
-Feel free to explore and use the code freely, with no restrictions.**
+## [EN] Project Overview & Roadmap
 
-PSRetrox is a C++ application designed to reverse engineer PlayStation 2 games. The primary goal of this project is to extract and process game files, enabling native PC ports of PS2 games. PSRetrox includes built-in tools for decompiling and decoding game assets, such as audio, 3D models, source code, and other game data.
+### Project Status & Authorship
+This project was originally started by [joacolns](https://github.com/joacolns), then forked and continued by [cualquiercosa327](https://github.com/cualquiercosa327), and is now maintained and expanded by [krplab](https://github.com/krplab). The goal is to continue the PSRetrox project in my own way, keeping the name, but evolving the architecture, codebase, and integration with [ps2-recomp](https://github.com/ran-j/PS2Recomp) as a complementary tool.
 
-## KRPLAB - Contributions 🏁
--Reading the directory and extracting small files (1 block).
+### What is PSRetrox?
+PSRetrox is a tool for reverse engineering PlayStation 2 games, focused on extracting, processing, and converting game files to enable native PC ports. It includes tools for decompiling, decoding, and extracting assets such as audio, 3D models, and code from PS2 ISOs.
 
--Extraction works for smaller files that fit in a single block (2048 bytes).
+### Roadmap: Migration to C & New Structure
+- The project is being migrated from C++ to pure C for greater portability and maintainability.
+- The folder structure will be modular and minimal, inspired by Plan 9:
+
+```
+/psretrox/
+├── include/      # All headers (iso.h, elf.h, mips.h, runtime.h, assets.h, util.h)
+├── src/          # All implementations (iso.c, elf.c, mips.c, runtime.c, assets.c, util.c, main.c)
+├── tools/        # Optional: debug/conversion tools
+├── tests/        # Unit and integration tests
+├── out/          # Extracted files, logs, generated C code
+```
+
+- The pipeline will integrate:
+	1. Extraction of ELF and assets from ISO (using ISOReader in C)
+	2. Asset extraction (audio, 3D, etc.)
+	3. Recompilation of ELF to C (adapting ps2-recomp pipeline to C)
+	4. Minimal runtime in C for execution on PC
+
+### Progress (2026-01)
+- ISO extraction: 80%
+- Asset extraction (audio/3D): 40%
+- ELF parsing: 30%
+- MIPS R5900 decoder/recompiler: 20%
+- Runtime: 10%
+- Integration with ps2-recomp: 10%
+
+### Features
+- Reverse engineering of PS2 ISOs
+- Extraction and decoding of audio, 3D models, and other assets
+- Recompilation of MIPS assembly to C
+- Modular, portable, and testable codebase
+- (Planned) Minimal runtime for running recompiled code on PC
+
+### Contributing
+Contributions are welcome! Please follow modern C practices, document complex logic, and ensure you do not break existing functionality. Open issues or pull requests as needed.
 
 ---
 
-## **Progress**
+## [PT-BR] Visão Geral & Planejamento
 
-<img src="./progress/psretrox_progressbar.svg">
+### Status do Projeto & Histórico de Forks
+O projeto foi iniciado por [joacolns](https://github.com/joacolns), depois continuado por [cualquiercosa327](https://github.com/cualquiercosa327), e agora mantido e expandido por [krplab](https://github.com/krplab). Pretendo dar continuidade ao psretrox do meu jeito, mantendo o nome, mas evoluindo a arquitetura, migrando para C e integrando o [ps2-recomp](https://github.com/ran-j/PS2Recomp) como complemento.
 
-<img src="./progress/gui_progressbar.svg">
+### O que é o PSRetrox?
+Ferramenta para engenharia reversa de jogos de PlayStation 2, focada em extrair, processar e converter arquivos de jogos para viabilizar ports nativos no PC. Inclui ferramentas para decompilar, decodificar e extrair assets (áudio, modelos 3D, código) de ISOs de PS2.
 
-<img src="./progress/mips_progressbar.svg">
+### Planejamento: Migração para C & Nova Estrutura
+- O projeto está sendo migrado de C++ para C puro, visando portabilidade e manutenção.
+- A estrutura de pastas será modular e minimalista, inspirada no Plan 9:
 
-<img src="./progress/recompilation_progressbar.svg">
+```
+/psretrox/
+├── include/      # Headers (iso.h, elf.h, mips.h, runtime.h, assets.h, util.h)
+├── src/          # Implementações (iso.c, elf.c, mips.c, runtime.c, assets.c, util.c, main.c)
+├── tools/        # Ferramentas opcionais de debug/conversão
+├── tests/        # Testes unitários e de integração
+├── out/          # Arquivos extraídos, logs, código C gerado
+```
 
-<img src="./progress/retroxengine_progressbar.svg">
+- O pipeline integrará:
+	1. Extração de ELF e assets da ISO (ISOReader em C)
+	2. Extração de assets (áudio, 3D, etc.)
+	3. Recompilação do ELF para C (adaptando pipeline do ps2-recomp para C)
+	4. Runtime mínimo em C para execução no PC
 
-## **Features**
-- **Reverse Engineering**: Decompiles PS2 game files from extracted .ISO files.
-- **Recompile**: Recompile assembly files to C code.
-- **Audio Extraction**: Extracts and decodes audio tracks (e.g., `.vag` files) into standard formats like `.mp3` or `.wav`.
-- **3D Model Processing**: Extracts and processes 3D model data from game files for use in modern 3D tools.
-- **File Decoding**: Handles PS2-specific formats like `.MB`, `.MH`, `.BD`, `.BH`, `.PSS`, `SLUS_XXX`, and more.
-- **Built-in Decompiler**: Uses Capstone for binary disassembly.
-- **High Performance**: Designed for fast and efficient extraction.
-- **Retrox Engine**: Tool to port PS2 recompiled .C files to PC.
+### Progresso (2026-01)
+- Extração de ISO: 80%
+- Extração de assets (áudio/3D): 40%
+- Parsing de ELF: 30%
+- Decoder/recompilador MIPS R5900: 20%
+- Runtime: 10%
+- Integração com ps2-recomp: 10%
 
-## **Contributing**
-We welcome contributions to enhance PSRetrox. Here's how you can contribute:
+### Funcionalidades
+- Engenharia reversa de ISOs de PS2
+- Extração e decodificação de áudio, modelos 3D e outros assets
+- Recompilação de assembly MIPS para C
+- Código modular, portável e testável
+- (Planejado) Runtime mínimo para rodar código recompilado no PC
 
-### Code Contribution
-
-1. Fork the repository and create your feature branch:
-`git checkout -b feature/YourFeature`
-
-2. Make your changes and commit them:
-`git commit -m "Add YourFeature"`
-
-3. Push your changes to your fork:
-`git push origin feature/YourFeature`
-
-4. Open a pull request on the main repository.
-
-### **Code Guidelines**
-Use consistent formatting and follow modern C++ practices.
-
-- Provide clear comments for complex logic.
-
-- Ensure your changes do not break existing functionality.
-
-- Reporting Issues
-
-### **Reporting Issues**
-
-If you find a bug or have a feature request, please open an issue with a detailed description.
+### Contribuindo
+Contribuições são bem-vindas! Siga boas práticas de C, documente lógicas complexas e garanta que não quebre funcionalidades existentes. Abra issues ou pull requests conforme necessário.
