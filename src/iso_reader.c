@@ -308,12 +308,27 @@ void iso_reader_read_directory_recursive(struct iso_reader *reader, const char *
                     if (!(name_len == 1 && (raw_name[0] == '\0' || raw_name[0] == '\1'))) {
                         clean_iso_filename_buffer(raw_name, name_len, clean_name, sizeof(clean_name));
 
-                        /* Build full path */
+                        /* Build full path manually to avoid truncation warnings */
                         char full_path[ISO_MAX_PATH];
+                        full_path[0] = '\0';
+                        
                         if (current.path[0] && strcmp(current.path, "/") != 0) {
-                            snprintf(full_path, sizeof(full_path), "%s/%s", current.path, clean_name);
+                            size_t plen = strlen(current.path);
+                            if (plen < ISO_MAX_PATH - 1) {
+                                memcpy(full_path, current.path, plen);
+                                full_path[plen] = '/';
+                                size_t remaining = ISO_MAX_PATH - plen - 2;
+                                size_t nlen = strlen(clean_name);
+                                if (nlen > remaining) nlen = remaining;
+                                memcpy(full_path + plen + 1, clean_name, nlen);
+                                full_path[plen + 1 + nlen] = '\0';
+                            }
                         } else {
-                            snprintf(full_path, sizeof(full_path), "/%s", clean_name);
+                            full_path[0] = '/';
+                            size_t nlen = strlen(clean_name);
+                            if (nlen > ISO_MAX_PATH - 2) nlen = ISO_MAX_PATH - 2;
+                            memcpy(full_path + 1, clean_name, nlen);
+                            full_path[1 + nlen] = '\0';
                         }
 
                         /* Call callback with full path */
