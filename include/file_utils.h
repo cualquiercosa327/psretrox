@@ -2,6 +2,7 @@
 #define FILE_UTILS_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 /**
  * @brief Reads a binary file into a dynamically allocated byte buffer.
