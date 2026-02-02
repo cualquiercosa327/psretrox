@@ -1,18 +1,14 @@
-#pragma once
-
 #ifndef MODEL_EXTRACTOR_H
 #define MODEL_EXTRACTOR_H
 
-#include <string>
-#include <vector>
+#include <string.h>
 
-// Función para leer un archivo binario en un vector de bytes
-//std::vector<uint8_t> readBinaryFile(const std::string& filePath);
-
-// Función para escribir un archivo binario
-void writeBinaryFile(const std::string& filePath, const std::vector<uint8_t>& data);
-
-// Función para extraer bloques de CRASH.BD y CRASH.BH
-void extractModels(const std::string& crashBHPath, const std::string& crashBDPath, const std::string& outputDir);
+/**
+ * @brief Extracts 3D models from CRASH.BH and CRASH.BD files.
+ * @param bh_path Path to the CRASH.BH file.
+ * @param bd_path Path to the CRASH.BD file.
+ * @param output_dir Directory to save the extracted models.
+ */
+void extract_models(const char* bh_path, const char* bd_path, const char* output_dir);
 
 #endif // MODEL_EXTRACTOR_H

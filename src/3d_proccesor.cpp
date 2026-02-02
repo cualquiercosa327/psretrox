@@ -1,72 +1,87 @@
-// En 3d_proccesor.cpp
 #include "3d_proccesor.h"
-#include "file_utils.h" // Incluir el nuevo archivo de cabecera
-#include <iostream>
-#include <filesystem>
-#include <stdexcept>
-#include <iomanip>
-#include <vector>
-#include <string>
-#include <cstdint>
+#include "../include/file_utils.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-/*
-// Función para leer un archivo binario
-std::vector<uint8_t> readBinaryFile(const std::string& filePath) {
-    std::cout << "Leyendo archivo: " << filePath << std::endl;
-    std::ifstream file(filePath, std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("No se pudo abrir el archivo: " + filePath);
-    }
-    std::vector<uint8_t> data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    std::cout << "Archivo leído: " << filePath << " (" << data.size() << " bytes)" << std::endl;
-    return data;
-}
+// C version of the function to extract 3D models from CRASH.BH and CRASH.BD files
+void extract_models(const char* bh_path, const char* bd_path, const char* output_dir) {
+  printf("Inicializing model extraction...\n");
+  size_t bh_size = 0;
+  uint8_t* crash_bh = read_binary_file(bh_path, &bh_size);
+  if (!crash_bh) {
+    fprintf(stderr, "Error reading CRASH.BH file\n");
+    free(crash_bh);
+    return;
+  }
 
-// Función para escribir un archivo binario
-void writeBinaryFile(const std::string& filePath, const std::vector<uint8_t>& data) {
-    std::cout << "Escribiendo archivo: " << filePath << std::endl;
-    std::ofstream file(filePath, std::ios::binary);
-    if (!file) {
-        throw std::runtime_error("No se pudo crear el archivo: " + filePath);
-    }
-    file.write(reinterpret_cast<const char*>(data.data()), data.size());
-    std::cout << "Archivo escrito: " << filePath << " (" << data.size() << " bytes)" << std::endl;
-}
-*/
+  size_t bd_size = 0;
+  uint8_t* crash_bd = read_binary_file(bd_path, &bd_size);
+  if (!crash_bd) {
+    fprintf(stderr, "Error reading CRASH.BD file\n");
+    free(crash_bh);
+    return;
+  }
 
-// Función para extraer modelos 3D de los archivos CRASH.BH y CRASH.BD
-void extractModels(const std::string& crashBHPath, const std::string& crashBDPath, const std::string& outputDir) {
-    std::cout << "Iniciando extracción de modelos..." << std::endl;
-    std::vector<uint8_t> crashBH = readBinaryFile(crashBHPath);
-    std::vector<uint8_t> crashBD = readBinaryFile(crashBDPath);
+  /* Create output directory (equivalent to std::filesystem::create_directories) */
+  if (create_directories(output_dir) != 0) {
+    perror("Error creating output directory");
+    free(crash_bh);
+    free(crash_bd);
+    return;
+  }
 
-    std::filesystem::create_directories(outputDir);
+  size_t entry_size = 12; /* offset (4) + size (4) + type (4) */
+  size_t num_entries = bh_size / entry_size;
 
-    size_t entrySize = 12; // Supongamos que cada entrada tiene 12 bytes (offset, tamaño, tipo)
-    size_t numEntries = crashBH.size() / entrySize;
+  printf("Number of entries: %zu\n", num_entries);
 
-    std::cout << "Número de entradas: " << numEntries << std::endl;
+  for (size_t i = 0; i < num_entries; ++i) {
+    size_t base = i * entry_size;
 
-    for (size_t i = 0; i < numEntries; ++i) {
-        uint32_t offset = *reinterpret_cast<const uint32_t*>(&crashBH[i * entrySize]);
-        uint32_t size = *reinterpret_cast<const uint32_t*>(&crashBH[i * entrySize + 4]);
-        uint32_t type = *reinterpret_cast<const uint32_t*>(&crashBH[i * entrySize + 8]);
+    uint32_t offset = read_u32_le(crash_bh + base);
+    uint32_t size   = read_u32_le(crash_bh + base + 4);
+    uint32_t type   = read_u32_le(crash_bh + base + 8);
 
-        // Validar los valores leídos
-        if (offset > crashBD.size() || size > crashBD.size() || offset + size > crashBD.size()) {
-            std::cerr << "Error: El bloque " << i + 1 << " tiene valores inválidos. Offset: " << offset << ", Tamaño: " << size << std::endl;
-            continue;
-        }
-
-        std::cout << "Extrayendo bloque " << i + 1 << " en offset: 0x" << std::hex << offset
-            << " con tamaño: " << size << " bytes, tipo: " << type << std::endl;
-
-        std::vector<uint8_t> blockData(crashBD.begin() + offset, crashBD.begin() + offset + size);
-        std::string blockFileName = outputDir + "/block_" + std::to_string(i + 1) + ".bin";
-        writeBinaryFile(blockFileName, blockData);
-
-        std::cout << "Bloque " << i + 1 << " guardado en: " << blockFileName << std::endl;
+    /* Validate values */
+    if (offset > bd_size || size > bd_size || offset + size > bd_size) {
+      fprintf(stderr,
+              "Error: Block %zu has invalid values. Offset: %u, Size: %u\n",
+              i + 1, offset, size);
+      continue;
     }
 
-    std::cout << "Extracción de modelos completada." << std::endl;
+    printf(
+      "Extracting block %zu at offset: 0x%X with size: %u bytes, type: %u\n",
+      i + 1, offset, size, type
+    );
+
+    /* Build output filename */
+    char output_path[1024];
+    snprintf(
+      output_path,
+      sizeof(output_path),
+      "%s/block_%zu.bin",
+      output_dir,
+      i + 1
+    );
+
+    /* Write block data directly from CRASH.BD */
+    if (write_binary_file(output_path, crash_bd + offset, size) != 0) {
+      fprintf(stderr,
+              "Error writing block %zu to file %s\n",
+              i + 1, output_path);
+      continue;
+    }
+
+    printf("Block %zu saved to: %s\n", i + 1, output_path);
+  }
+
+  printf("Model extraction completed.\n");
+
+  free(crash_bh);
+  free(crash_bd);
 }
+
