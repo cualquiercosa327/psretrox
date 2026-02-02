@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 uint8_t* read_binary_file(const char* filePath, size_t* outSize) {
     FILE* file = fopen(filePath, "rb");
@@ -67,19 +69,22 @@ void clean_iso_filename_buffer(const char *src, size_t len, char *dst, size_t ds
     dst[j] = '\0';
 }
 
-void write_binary_file(const char* filePath, const uint8_t* data, size_t dataSize) {
+int write_binary_file(const char* filePath, const uint8_t* data, size_t dataSize) {
     FILE* file = fopen(filePath, "wb");
     if (!file) {
         perror("Failed to open file for writing");
-        return;
+        return -1;
     }
 
     size_t bytesWritten = fwrite(data, 1, dataSize, file);
     if (bytesWritten != dataSize) {
         perror("Failed to write complete data to file");
+        fclose(file);
+        return -1;
     }
 
     fclose(file);
+    return 0;
 }
 
 void str_to_upper(char *s) {
@@ -87,4 +92,33 @@ void str_to_upper(char *s) {
         *s = (char)toupper((unsigned char)*s);
         ++s;
     }
+}
+
+uint32_t read_u32_le(const uint8_t* p) {
+  return (uint32_t)p[0]
+       | ((uint32_t)p[1] << 8)
+       | ((uint32_t)p[2] << 16)
+       | ((uint32_t)p[3] << 24);
+}
+
+int create_directories(const char *path) {
+    char tmp[1024];
+    char *p = NULL;
+    size_t len;
+
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    len = strlen(tmp);
+
+    if (tmp[len - 1] == '/')
+        tmp[len - 1] = '\0';
+
+    for (p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(tmp, 0755); 
+            *p = '/';
+        }
+    }
+
+    return mkdir(tmp, 0755);
 }

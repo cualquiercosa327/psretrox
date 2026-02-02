@@ -33,13 +33,29 @@ void clean_iso_filename_buffer(const char *src, size_t len, char *dst, size_t ds
  * @param file_path Path to the binary file to create
  * @param data Pointer to the byte data to write
  * @param data_size Size of the data to write
+ * @return 0 on success, -1 on failure
  */
-void write_binary_file(const char* file_path, const uint8_t* data, size_t data_size);
+int write_binary_file(const char* file_path, const uint8_t* data, size_t data_size);
 
 /**
  * @brief Converts a string to uppercase in place.
  * @param s The string to convert (must be null-terminated)
  */
 void str_to_upper(char *s);
+
+
+/**
+ * @brief Creates directories recursively.
+ * @param path The directory path to create
+ * @return 0 on success, -1 on failure
+ */
+int create_directories(const char* path);
+
+/**
+ * @brief Reads a little-endian unsigned 32-bit integer from a byte buffer.
+ * @param p Pointer to the byte buffer
+ * @return The read uint32_t value
+ */
+uint32_t read_u32_le(const uint8_t* p);
 
 #endif // FILE_UTILS_H
