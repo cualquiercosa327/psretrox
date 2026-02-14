@@ -47,15 +47,26 @@ PSRetrox is a tool for reverse engineering PlayStation 2 games, focused on extra
 Contributions are welcome! Please follow modern C practices, document complex logic, and ensure you do not break existing functionality. Open issues or pull requests as needed.
 
 
-### [EN/PT-BR] Recent Updates
+### Recent Updates
 
 :calendar: **Date:** 11/02
 
+### Refactoring & Improvements
 - All code now uses snake_case naming for consistency and maintainability.
 - ISOReader fully refactored: supports fragmented files (extents), subdirectory traversal, CRC32 validation, and robust error handling.
 - All compilation warnings (including path truncation in recursive directory reading) have been fixed for maximum portability.
 - The test suite was expanded and moved, now covering all ISOReader features: error handling, extraction, validation, recursive navigation, and edge cases.
 - The codebase is modular, portable, and ready for further integration with audio, 3D, and ELF modules.
+
+:calendar: **Date:** 14/02
+
+### Features
+- Recompilation of MIPS assembly migrating from ps2recomp's `r5900_decoder.cpp` (C++) to plain C.
+ * This file replaces the old tools/disasm.c (which used Capstone for x86).
+ * Now decodes MIPS R5900 natively without any external dependency.
+- Migrated from ps2recomp's code_generator.cpp (C++) to C, adapting the code generation pipeline for C output instead of C++.
+- Modular, portable, and testable codebase
+- (Planned) Minimal runtime for running recompiled code on PC
 
 ---
 
@@ -104,10 +115,11 @@ Ferramenta para engenharia reversa de jogos de PlayStation 2, focada em extrair,
 ### Contribuindo
 Contribuições são bem-vindas! Siga boas práticas de C, documente lógicas complexas e garanta que não quebre funcionalidades existentes. Abra issues ou pull requests conforme necessário.
 
-Atualizações Recentes
+### Atualizações Recentes
 
 :calendar: **Data:** 11/02
 
+### Refatoração & Melhorias
 * Todo o código agora utiliza nomenclatura em **snake_case**, garantindo maior consistência e manutenibilidade.
 * O **ISOReader** foi completamente refatorado: agora oferece suporte a arquivos fragmentados (extents), navegação por subdiretórios, validação CRC32 e tratamento robusto de erros.
 * Todos os *warnings* de compilação foram corrigidos (incluindo truncamento de caminhos na leitura recursiva de diretórios), assegurando máxima portabilidade.
@@ -119,3 +131,13 @@ Se quiser, posso:
 * padronizar o texto para **CHANGELOG**,
 * gerar uma versão **EN ↔ PT-BR lado a lado**, ou
 * adaptar para **README.md** ou **release notes**.
+
+:calendar: **Date:** 14/02
+
+### Funcionalidades
+- Recompilação de `r5900_decoder.cpp` (C++) para C puro.
+ * Este arquivo substitui o antigo tools/disasm.c (que usava Capstone para x86).
+ * Agora decodifica MIPS R5900 nativamente sem dependências externas.
+- Migrado de ps2recomp's code_generator.cpp (C++) para C, adaptando o pipeline de geração de código para saída em C ao invés de C++.
+- Base de código modular, portátil e testável
+- (Planejado) Runtime mínimo para executar código recompilado no PC
