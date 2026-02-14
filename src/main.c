@@ -1,8 +1,8 @@
 /*
  * psretrox - PS2 Reverse Engineering Toolkit
  *
- * Integrated CLI that orchestrates ISO reading, asset extraction,
- * disassembly, and asm-to-C conversion.
+ * Integrated CLI: ISO → ELF extraction → R5900 decode → C translation.
+ * Also supports asset extraction, disassembly listing, and ISO browsing.
  *
  * Pure C. No exceptions. No classes. No bullshit.
  */
@@ -10,14 +10,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
 #include "../include/iso_reader.h"
 #include "../include/file_utils.h"
 #include "../include/assets.h"
-#include "../include/disasm.h"
-#include "../include/convert.h"
+#include "../include/r5900_decompiler.h"
+#include "../include/recompiler.h"
 
 /* ==================== Logo ==================== */
 
@@ -38,102 +39,196 @@ static void display_logo(void) {
     printf("%s", reset);
 }
 
-/* ==================== Menu ==================== */
-
-static void menu(void) {
-    printf("1 - Decompile files and recompile to C\n");
-    printf("2 - Decompile to MIPS assembly\n");
-    printf("3 - Recompile assembly to C\n");
-    printf("4 - Extract 3D models\n");
-    printf("5 - Convert cutscenes (PSS → MP4)\n");
-    printf("6 - Extract audio tracks\n");
-    printf("7 - Open ISO and list files\n");
-    printf("q - Quit\n\n");
-}
-
-/* ==================== Helpers ==================== */
+/* ==================== ELF helpers ==================== */
 
 /**
- * Disassemble a single file by path.
- * Reads binary, calls disassemble_code, frees buffer.
+ * Extract the ELF executable name from SYSTEM.CNF inside the ISO.
+ * Parses "BOOT2 = cdrom0:\\SLUS_123.45;1" into "SLUS_123.45".
  */
-static void disasm_file(const char *path, const char *label) {
-    size_t size = 0;
-    uint8_t *data = read_binary_file(path, &size);
-    if (!data) {
-        fprintf(stderr, "Could not read: %s\n", path);
-        return;
+static int get_elf_name_from_system_cnf(struct iso_reader *reader,
+                                        char *elf_name, size_t sz)
+{
+    char cnf[2048];
+    if (!iso_reader_find_system_cnf(reader, cnf, sizeof(cnf))) return 0;
+
+    char *boot = strstr(cnf, "BOOT2");
+    if (!boot) boot = strstr(cnf, "BOOT");
+    if (!boot) return 0;
+
+    char *eq = strchr(boot, '=');
+    if (!eq) return 0;
+    eq++;
+    while (*eq == ' ' || *eq == '\t') eq++;
+
+    char *end = strchr(eq, '\n');
+    if (!end) end = eq + strlen(eq);
+
+    size_t len = (size_t)(end - eq);
+    if (len >= sz) len = sz - 1;
+    strncpy(elf_name, eq, len);
+    elf_name[len] = '\0';
+
+    /* strip "cdrom0:\" prefix */
+    char *colon = strchr(elf_name, ':');
+    if (colon) memmove(elf_name, colon + 1, strlen(colon + 1) + 1);
+
+    /* strip ";1" suffix */
+    char *semi = strchr(elf_name, ';');
+    if (semi) *semi = '\0';
+
+    /* normalise path separators */
+    for (char *p = elf_name; *p; ++p)
+        if (*p == '\\') *p = '/';
+
+    /* trim leading whitespace */
+    char *start = elf_name;
+    while (*start == ' ') start++;
+    if (start != elf_name)
+        memmove(elf_name, start, strlen(start) + 1);
+
+    /* remove leading '/' — the ISO directory uses bare filenames */
+    if (elf_name[0] == '/') {
+        memmove(elf_name, elf_name + 1, strlen(elf_name + 1) + 1);
     }
-    printf("Disassembling %s...\n", label);
-    disassemble_code(data, size, label);
-    free(data);
+
+    return 1;
 }
 
 /**
- * Iterate a directory, disassemble all files matching a given extension.
+ * Read the first PT_LOAD segment from a MIPS ELF32 file.
+ * Returns the raw code buffer, its size, and its virtual address.
  */
-static void disasm_directory(const char *dir_path, const char *extension) {
-    DIR *d = opendir(dir_path);
-    if (!d) {
-        fprintf(stderr, "Cannot open directory: %s\n", dir_path);
-        return;
-    }
+static int extract_elf_text(const char *elf_path,
+                            uint8_t **out_buf, size_t *out_size,
+                            uint32_t *out_vaddr)
+{
+    FILE *f = fopen(elf_path, "rb");
+    if (!f) return 0;
 
-    struct dirent *ent;
-    while ((ent = readdir(d)) != NULL) {
-        size_t nlen = strlen(ent->d_name);
-        size_t elen = strlen(extension);
-        if (nlen > elen && strcmp(ent->d_name + nlen - elen, extension) == 0) {
-            char full_path[1024];
-            snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, ent->d_name);
-            disasm_file(full_path, ent->d_name);
+    uint8_t e_ident[16];
+    if (fread(e_ident, 1, 16, f) != 16) { fclose(f); return 0; }
+    if (e_ident[0] != 0x7F || e_ident[1] != 'E' ||
+        e_ident[2] != 'L'  || e_ident[3] != 'F') { fclose(f); return 0; }
+
+    /* ELF32 header */
+    uint8_t header[52];
+    fseek(f, 0, SEEK_SET);
+    if (fread(header, 1, 52, f) != 52) { fclose(f); return 0; }
+
+    uint16_t phnum;  memcpy(&phnum, header + 44, 2);
+    uint32_t phoff;  memcpy(&phoff, header + 28, 4);
+
+    fseek(f, (long)phoff, SEEK_SET);
+    for (int i = 0; i < phnum; ++i) {
+        uint8_t ph[32];
+        if (fread(ph, 1, 32, f) != 32) break;
+
+        uint32_t type;   memcpy(&type,   ph + 0,  4);
+        if (type != 1) continue;  /* PT_LOAD */
+
+        uint32_t offset; memcpy(&offset, ph + 4,  4);
+        uint32_t vaddr;  memcpy(&vaddr,  ph + 8,  4);
+        uint32_t filesz; memcpy(&filesz, ph + 16, 4);
+
+        *out_buf = (uint8_t *)malloc(filesz);
+        if (!*out_buf) { fclose(f); return 0; }
+
+        fseek(f, (long)offset, SEEK_SET);
+        if (fread(*out_buf, 1, filesz, f) != filesz) {
+            free(*out_buf); *out_buf = NULL;
+            fclose(f); return 0;
         }
+        *out_size  = filesz;
+        *out_vaddr = vaddr;
+        fclose(f);
+        return 1;
     }
-    closedir(d);
+    fclose(f);
+    return 0;
 }
+
+/* ==================== Pipeline: ISO → ELF → decode → C ==================== */
+
+/**
+ * Full pipeline: open ISO, find ELF via SYSTEM.CNF, extract .text,
+ * decode R5900 instructions, translate to C, and write output file.
+ */
+static int run_pipeline(const char *iso_path)
+{
+    struct iso_reader reader;
+    if (!iso_reader_init(&reader, iso_path)) {
+        fprintf(stderr, "Erro ao abrir ISO: %s\n", iso_path);
+        return 1;
+    }
+
+    /* 1. Find ELF name from SYSTEM.CNF */
+    char elf_name[256];
+    if (!get_elf_name_from_system_cnf(&reader, elf_name, sizeof(elf_name))) {
+        fprintf(stderr, "Nao foi possivel localizar o ELF principal na ISO.\n");
+        iso_reader_close(&reader);
+        return 1;
+    }
+    printf("ELF encontrado: %s\n", elf_name);
+
+    /* 2. Extract ELF from ISO */
+    const char *extracted_elf = "extracted.elf";
+    if (!iso_reader_extract_file_by_name(&reader, elf_name, extracted_elf)) {
+        fprintf(stderr, "Falha ao extrair ELF da ISO.\n");
+        iso_reader_close(&reader);
+        return 1;
+    }
+    iso_reader_close(&reader);
+    printf("ELF extraido: %s\n", extracted_elf);
+
+    /* 3. Read the first PT_LOAD from the ELF */
+    uint8_t *text_buf = NULL;
+    size_t   text_size = 0;
+    uint32_t vaddr = 0;
+    if (!extract_elf_text(extracted_elf, &text_buf, &text_size, &vaddr)) {
+        fprintf(stderr, "Falha ao extrair segmento .text do ELF.\n");
+        return 1;
+    }
+    printf("Segmento .text: %zu bytes em 0x%08X\n", text_size, vaddr);
+
+    /* 4. Decode R5900 instructions */
+    size_t inst_count = text_size / 4;
+    r5900_inst_t *insts = (r5900_inst_t *)calloc(inst_count, sizeof(r5900_inst_t));
+    if (!insts) {
+        fprintf(stderr, "Falha de alocacao para %zu instrucoes.\n", inst_count);
+        free(text_buf);
+        return 1;
+    }
+    size_t decoded = 0;
+    r5900_decode_buffer(text_buf, text_size, vaddr, insts, &decoded);
+    printf("Instrucoes decodificadas: %zu\n", decoded);
+
+    /* 5. Generate disassembly listing */
+    r5900_disasm_to_file(text_buf, text_size, vaddr, "disasm_output.asm");
+    printf("Disassembly salvo: disasm_output.asm\n");
+
+    /* 6. Translate to C */
+    recomp_translate_to_file(insts, decoded, "recompiled_main", "recompiled_output.c");
+    printf("Traducao concluida: recompiled_output.c\n");
+
+    free(insts);
+    free(text_buf);
+    return 0;
+}
+
+/* ==================== Helpers (kept from original) ==================== */
 
 /**
  * Convert PSS to MP4 using ffmpeg (external tool).
  */
 static int convert_pss_to_mp4(const char *input, const char *output) {
     char cmd[2048];
-    snprintf(cmd, sizeof(cmd), "ffmpeg -i \"%s\" -vcodec libx264 -acodec aac \"%s\" -y 2>/dev/null", input, output);
+    snprintf(cmd, sizeof(cmd),
+             "ffmpeg -i \"%s\" -vcodec libx264 -acodec aac \"%s\" -y 2>/dev/null",
+             input, output);
     int r = system(cmd);
-    if (r != 0) {
+    if (r != 0)
         fprintf(stderr, "ffmpeg conversion failed for: %s\n", input);
-    }
     return r;
-}
-
-/**
- * Recompile all .asm files in a directory to C.
- */
-static void recomp_directory(const char *asm_dir, const char *c_dir) {
-    create_directories(c_dir);
-
-    DIR *d = opendir(asm_dir);
-    if (!d) {
-        fprintf(stderr, "Cannot open directory: %s\n", asm_dir);
-        return;
-    }
-
-    struct dirent *ent;
-    while ((ent = readdir(d)) != NULL) {
-        size_t nlen = strlen(ent->d_name);
-        if (nlen > 4 && strcmp(ent->d_name + nlen - 4, ".asm") == 0) {
-            char asm_path[1024], c_path[1024], stem[256];
-
-            strncpy(stem, ent->d_name, nlen - 4);
-            stem[nlen - 4] = '\0';
-
-            snprintf(asm_path, sizeof(asm_path), "%s/%s", asm_dir, ent->d_name);
-            snprintf(c_path, sizeof(c_path), "%s/%s.c", c_dir, stem);
-
-            printf("Converting %s → %s.c\n", ent->d_name, stem);
-            convert_to_c(asm_path, c_path);
-        }
-    }
-    closedir(d);
 }
 
 /* ==================== ISO Info ==================== */
@@ -152,13 +247,10 @@ static void iso_info(const char *iso_path) {
         return;
     }
 
-    /* SYSTEM.CNF */
     char cnf[512];
-    if (iso_reader_find_system_cnf(&reader, cnf, sizeof(cnf))) {
+    if (iso_reader_find_system_cnf(&reader, cnf, sizeof(cnf)))
         printf("\nSYSTEM.CNF:\n%s\n", cnf);
-    }
 
-    /* Root directory listing */
     printf("\nRoot directory:\n");
     int count = 0;
     iso_reader_read_directory(&reader, print_file_cb, &count);
@@ -167,12 +259,31 @@ static void iso_info(const char *iso_path) {
     iso_reader_close(&reader);
 }
 
+/* ==================== Menu ==================== */
+
+static void menu(void) {
+    printf("1 - Pipeline completo (ISO -> ELF -> decode -> C)\n");
+    printf("2 - Disassembly R5900 (ISO -> .asm)\n");
+    printf("3 - Apenas traduzir para C (ISO -> .c)\n");
+    printf("4 - Extract 3D models\n");
+    printf("5 - Convert cutscenes (PSS -> MP4)\n");
+    printf("6 - Extract audio tracks\n");
+    printf("7 - Open ISO and list files\n");
+    printf("q - Quit\n\n");
+}
+
 /* ==================== Main ==================== */
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
 
+    /* Direct mode: psretrox arquivo.iso */
+    if (argc >= 2) {
+        display_logo();
+        printf("Modo direto: %s\n\n", argv[1]);
+        return run_pipeline(argv[1]);
+    }
+
+    /* Interactive mode */
     display_logo();
 
     char selection;
@@ -185,47 +296,52 @@ int main(int argc, char **argv) {
 
         switch (selection) {
 
-        /* 1: Full pipeline */
+        /* 1: Full pipeline ISO → ELF → decode → C */
         case '1': {
             char iso_path[512];
             printf("ISO path: ");
             scanf(" %511s", iso_path);
-
-            /* TODO: extract ISO contents to iso/ then run pipeline */
-            printf("Full pipeline not yet wired — use individual options.\n");
+            run_pipeline(iso_path);
             break;
         }
 
-        /* 2: Disassemble */
+        /* 2: Disassembly only */
         case '2': {
-            char path[512];
-            printf("File or directory to disassemble: ");
-            scanf(" %511s", path);
+            char iso_path[512];
+            printf("ISO path: ");
+            scanf(" %511s", iso_path);
 
-            struct stat st;
-            if (stat(path, &st) != 0) {
-                fprintf(stderr, "Path not found: %s\n", path);
+            struct iso_reader reader;
+            if (!iso_reader_init(&reader, iso_path)) {
+                fprintf(stderr, "Erro ao abrir ISO: %s\n", iso_path);
                 break;
             }
+            char elf_name[256];
+            if (!get_elf_name_from_system_cnf(&reader, elf_name, sizeof(elf_name))) {
+                fprintf(stderr, "ELF nao encontrado.\n");
+                iso_reader_close(&reader);
+                break;
+            }
+            iso_reader_extract_file_by_name(&reader, elf_name, "extracted.elf");
+            iso_reader_close(&reader);
 
-            if (S_ISDIR(st.st_mode)) {
-                disasm_directory(path, ".BIN");
-                disasm_directory(path, ".IRX");
+            uint8_t *buf = NULL; size_t sz = 0; uint32_t va = 0;
+            if (extract_elf_text("extracted.elf", &buf, &sz, &va)) {
+                r5900_disasm_to_file(buf, sz, va, "disasm_output.asm");
+                printf("Disassembly salvo: disasm_output.asm\n");
+                free(buf);
             } else {
-                disasm_file(path, path);
+                fprintf(stderr, "Falha ao extrair .text\n");
             }
             break;
         }
 
-        /* 3: Recompile asm → C */
+        /* 3: Translate to C only */
         case '3': {
-            char asm_dir[512], c_dir[512];
-            printf("Assembly directory: ");
-            scanf(" %511s", asm_dir);
-            printf("C output directory: ");
-            scanf(" %511s", c_dir);
-
-            recomp_directory(asm_dir, c_dir);
+            char iso_path[512];
+            printf("ISO path: ");
+            scanf(" %511s", iso_path);
+            run_pipeline(iso_path);
             break;
         }
 
@@ -238,7 +354,6 @@ int main(int argc, char **argv) {
             scanf(" %511s", bd);
             printf("Output directory: ");
             scanf(" %511s", out_dir);
-
             extract_models(bh, bd, out_dir);
             break;
         }
@@ -254,10 +369,7 @@ int main(int argc, char **argv) {
             create_directories(out_dir);
 
             DIR *d = opendir(fmv_dir);
-            if (!d) {
-                fprintf(stderr, "Cannot open: %s\n", fmv_dir);
-                break;
-            }
+            if (!d) { fprintf(stderr, "Cannot open: %s\n", fmv_dir); break; }
             struct dirent *ent;
             while ((ent = readdir(d)) != NULL) {
                 size_t nlen = strlen(ent->d_name);
@@ -265,11 +377,9 @@ int main(int argc, char **argv) {
                     char in_path[1024], out_path[1024], stem[256];
                     strncpy(stem, ent->d_name, nlen - 4);
                     stem[nlen - 4] = '\0';
-
                     snprintf(in_path, sizeof(in_path), "%s/%s", fmv_dir, ent->d_name);
                     snprintf(out_path, sizeof(out_path), "%s/%s.mp4", out_dir, stem);
-
-                    printf("Converting %s → %s.mp4\n", ent->d_name, stem);
+                    printf("Converting %s -> %s.mp4\n", ent->d_name, stem);
                     convert_pss_to_mp4(in_path, out_path);
                 }
             }
@@ -286,7 +396,6 @@ int main(int argc, char **argv) {
             scanf(" %511s", mh);
             printf("Output directory: ");
             scanf(" %511s", out_dir);
-
             extract_audio_tracks(mb, mh, out_dir);
             break;
         }

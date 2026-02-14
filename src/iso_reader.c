@@ -172,33 +172,37 @@ int iso_reader_find_system_cnf(struct iso_reader *reader, char *buffer, size_t b
     if (!reader || !reader->file || !buffer || bufsize == 0)
         return 0;
 
-    const size_t max_blocks = 300;
-    uint8_t block[ISO_BLOCK_SIZE];
-    const char *needle = "SYSTEM.CNF";
-    size_t needle_len = 10;
-
-    for (size_t i = 0; i < max_blocks; ++i) {
-        size_t bytes_read = iso_reader_read_block(reader, i, block, ISO_BLOCK_SIZE);
-        if (bytes_read == 0)
-            continue;
-
-        /* Search for "SYSTEM.CNF" in block */
-        for (size_t j = 0; j + needle_len <= bytes_read; ++j) {
-            if (memcmp(&block[j], needle, needle_len) == 0) {
-                /* Found! Copy up to 512 printable bytes */
-                size_t k = 0;
-                for (size_t m = j; m < j + 512 && m < bytes_read && k < bufsize - 1; ++m) {
-                    if (isprint(block[m]) || block[m] == '\n')
-                        buffer[k++] = (char)block[m];
-                }
-                buffer[k] = '\0';
-                return 1;
-            }
-        }
+    
+    struct iso_file_entry entry;
+    if (!iso_reader_find_file_entry(reader, "SYSTEM.CNF", &entry)) {
+        buffer[0] = '\0';
+        return 0;
     }
 
-    buffer[0] = '\0';
-    return 0;
+    // Lê o conteúdo do arquivo SYSTEM.CNF para o buffer
+    size_t total_to_read = (entry.total_size < bufsize - 1) ? entry.total_size : bufsize - 1;
+    size_t total_read = 0;
+    size_t ext;
+    for (ext = 0; ext < entry.extent_count && total_read < total_to_read; ++ext) {
+        uint32_t ext_lba = entry.extents[ext].lba;
+        uint32_t ext_size = entry.extents[ext].size;
+        size_t block_idx = 0;
+        while (ext_size > 0 && total_read < total_to_read) {
+            uint8_t data_block[ISO_BLOCK_SIZE];
+            size_t bytes_read = iso_reader_read_block(reader, ext_lba + block_idx, data_block, ISO_BLOCK_SIZE);
+            if (bytes_read == 0)
+                break;
+            size_t to_copy = ext_size < ISO_BLOCK_SIZE ? ext_size : ISO_BLOCK_SIZE;
+            if (to_copy > total_to_read - total_read)
+                to_copy = total_to_read - total_read;
+            memcpy(buffer + total_read, data_block, to_copy);
+            total_read += to_copy;
+            ext_size -= (uint32_t)to_copy;
+            ++block_idx;
+        }
+    }
+    buffer[total_read] = '\0';
+    return (total_read > 0);
 }
 
 void iso_reader_read_directory(struct iso_reader *reader, void (*on_file)(const char *filename, void *userdata), void *userdata) {
@@ -341,8 +345,10 @@ void iso_reader_read_directory_recursive(struct iso_reader *reader, const char *
                             uint32_t sub_size = dir_block[pos + 10] | (dir_block[pos + 11] << 8) |
                                                 (dir_block[pos + 12] << 16) | (dir_block[pos + 13] << 24);
 
-                            strncpy(stack[stack_top].path, full_path, ISO_MAX_PATH - 1);
-                            stack[stack_top].path[ISO_MAX_PATH - 1] = '\0';
+                            size_t fplen = strlen(full_path);
+                            if (fplen >= ISO_MAX_PATH) fplen = ISO_MAX_PATH - 1;
+                            memcpy(stack[stack_top].path, full_path, fplen);
+                            stack[stack_top].path[fplen] = '\0';
                             stack[stack_top].lba = sub_lba;
                             stack[stack_top].size = sub_size;
                             stack_top++;
