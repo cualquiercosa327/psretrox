@@ -25,14 +25,6 @@ PSRetrox is a tool for reverse engineering PlayStation 2 games, focused on extra
 	1. Extraction of ELF and assets from ISO (using ISOReader in C)
 	2. Asset extraction (audio, 3D, etc.)
 
-### [EN/PT-BR] Recent Updates
-
-- All code now uses snake_case naming for consistency and maintainability.
-- ISOReader fully refactored: supports fragmented files (extents), subdirectory traversal, CRC32 validation, and robust error handling.
-- All compilation warnings (including path truncation in recursive directory reading) have been fixed for maximum portability.
-- The test suite was expanded and moved, now covering all ISOReader features: error handling, extraction, validation, recursive navigation, and edge cases.
-- The codebase is modular, portable, and ready for further integration with audio, 3D, and ELF modules.
-
 	3. Recompilation of ELF to C (adapting ps2-recomp pipeline to C)
 	4. Minimal runtime in C for execution on PC
 
@@ -53,6 +45,17 @@ PSRetrox is a tool for reverse engineering PlayStation 2 games, focused on extra
 
 ### Contributing
 Contributions are welcome! Please follow modern C practices, document complex logic, and ensure you do not break existing functionality. Open issues or pull requests as needed.
+
+
+### [EN/PT-BR] Recent Updates
+
+:calendar: **Date:** 11/02
+
+- All code now uses snake_case naming for consistency and maintainability.
+- ISOReader fully refactored: supports fragmented files (extents), subdirectory traversal, CRC32 validation, and robust error handling.
+- All compilation warnings (including path truncation in recursive directory reading) have been fixed for maximum portability.
+- The test suite was expanded and moved, now covering all ISOReader features: error handling, extraction, validation, recursive navigation, and edge cases.
+- The codebase is modular, portable, and ready for further integration with audio, 3D, and ELF modules.
 
 ---
 
@@ -100,3 +103,19 @@ Ferramenta para engenharia reversa de jogos de PlayStation 2, focada em extrair,
 
 ### Contribuindo
 Contribuições são bem-vindas! Siga boas práticas de C, documente lógicas complexas e garanta que não quebre funcionalidades existentes. Abra issues ou pull requests conforme necessário.
+
+Atualizações Recentes
+
+:calendar: **Data:** 11/02
+
+* Todo o código agora utiliza nomenclatura em **snake_case**, garantindo maior consistência e manutenibilidade.
+* O **ISOReader** foi completamente refatorado: agora oferece suporte a arquivos fragmentados (extents), navegação por subdiretórios, validação CRC32 e tratamento robusto de erros.
+* Todos os *warnings* de compilação foram corrigidos (incluindo truncamento de caminhos na leitura recursiva de diretórios), assegurando máxima portabilidade.
+* A suíte de testes foi expandida e reorganizada, passando a cobrir todas as funcionalidades do ISOReader: tratamento de erros, extração, validação, navegação recursiva e casos extremos (*edge cases*).
+* A base de código está modular, portátil e pronta para futuras integrações com módulos de áudio, 3D e ELF.
+
+Se quiser, posso:
+
+* padronizar o texto para **CHANGELOG**,
+* gerar uma versão **EN ↔ PT-BR lado a lado**, ou
+* adaptar para **README.md** ou **release notes**.
