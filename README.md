@@ -24,6 +24,15 @@ PSRetrox is a tool for reverse engineering PlayStation 2 games, focused on extra
 - The pipeline will integrate:
 	1. Extraction of ELF and assets from ISO (using ISOReader in C)
 	2. Asset extraction (audio, 3D, etc.)
+
+### [EN/PT-BR] Recent Updates
+
+- All code now uses snake_case naming for consistency and maintainability.
+- ISOReader fully refactored: supports fragmented files (extents), subdirectory traversal, CRC32 validation, and robust error handling.
+- All compilation warnings (including path truncation in recursive directory reading) have been fixed for maximum portability.
+- The test suite was expanded and moved, now covering all ISOReader features: error handling, extraction, validation, recursive navigation, and edge cases.
+- The codebase is modular, portable, and ready for further integration with audio, 3D, and ELF modules.
+
 	3. Recompilation of ELF to C (adapting ps2-recomp pipeline to C)
 	4. Minimal runtime in C for execution on PC
 
